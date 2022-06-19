@@ -1,4 +1,5 @@
 # Ladron
+<img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-brightgreen"> <img alt="License GPL 3.0" src="https://img.shields.io/badge/license-GPL%203.0-blue">
 A Jitbit Macro Recorder Keygen
 
 ## 1. What is Jitbit Macro Recorder?
