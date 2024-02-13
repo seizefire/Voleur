@@ -1,21 +1,38 @@
-#include <iostream>
-#include <tomcrypt.h>
+#include "jitbit.hpp"
 
-#include "base64.h"
-#include "logger.h"
+#include <libtomcrypt/tomcrypt.h>
+#include <Windows.h>
 
-unsigned char* P = b64_decode((unsigned char*)"3N35IcqKMJLdrg5HmSYa6duURBVDNZgj7BCnwcz/ufmuTgBqQSf3cxqHNTX31BTKJWBBdfF2LxA+uLRmTXZGzw==");
-unsigned char* Q = b64_decode((unsigned char*)"hEN4EgQsu/HHDcZh9Qwxg43wkL8=");
-unsigned char* G = b64_decode((unsigned char*)"gYixcJeFwqXYS9td15uvi1o5Ontd6U00qjtvo7aPo4ccNB7jt5SGLEBM9RPsYPKnmC8PRBze5gm2MBgZIm4YsQ==");
-unsigned char* X = b64_decode((unsigned char*)"EaOoelpYoydZvGFMZHUobAPlfSY=");
-unsigned char* Y = b64_decode((unsigned char*)"RSijtNxu4sTZc50YrQLR19KX3PEsIGSrvcRYdAUKb1nWGJNY0aAdt/E5HtbMbSqIFPI3mLcOYdgxu9WyzGkRNw==");
-unsigned char* seed = b64_decode((unsigned char*)"J0VzBGcedEyNe+AWgq/mC/Wf9RU=");
-unsigned char* empty = (unsigned char*)"";
+unsigned char* b64_decode(const char* input, unsigned long length){
+	unsigned long input_length = strlen(input);
+	unsigned long b64_length = length;
+	unsigned char* output = new unsigned char[length];
+	memset(output, 0, b64_length);
+	base64_decode(input, input_length, output, &b64_length);
+	if(length != b64_length){
+		exit(0);
+	}
+	return output;
+}
 
-unsigned char* jitbit_generate_code(unsigned char* licensor){
+char* b64_encode(unsigned char* input, unsigned long size){
+	unsigned long b64_length = (size - (size % 3)) / 3 * 4 + (size % 3 > 0 ? 4 : 0) + 1;
+	char* output = new char[b64_length];
+	memset(output, 0, b64_length);
+	base64_encode(input, size, output, &b64_length);
+	return output;
+}
+
+unsigned char* P = b64_decode("3N35IcqKMJLdrg5HmSYa6duURBVDNZgj7BCnwcz/ufmuTgBqQSf3cxqHNTX31BTKJWBBdfF2LxA+uLRmTXZGzw==", 64);
+unsigned char* Q = b64_decode("hEN4EgQsu/HHDcZh9Qwxg43wkL8=", 20);
+unsigned char* G = b64_decode("gYixcJeFwqXYS9td15uvi1o5Ontd6U00qjtvo7aPo4ccNB7jt5SGLEBM9RPsYPKnmC8PRBze5gm2MBgZIm4YsQ==", 64);
+unsigned char* X = b64_decode("EaOoelpYoydZvGFMZHUobAPlfSY=", 20);
+unsigned char* Y = b64_decode("RSijtNxu4sTZc50YrQLR19KX3PEsIGSrvcRYdAUKb1nWGJNY0aAdt/E5HtbMbSqIFPI3mLcOYdgxu9WyzGkRNw==", 64);
+unsigned char* seed = b64_decode("J0VzBGcedEyNe+AWgq/mC/Wf9RU=", 20);
+
+std::string crack_jitbit(const char* licensor){
 	if(register_hash(&sha1_desc) > 0){
-		log_error("Registering SHA1 algorithm failed");
-		return empty;
+		return "[DSA] Registering SHA1 algorithm failed";
 	}
 	int sha1_id = find_hash("sha1");
 	unsigned long length = strlen((char*) licensor);
@@ -24,50 +41,57 @@ unsigned char* jitbit_generate_code(unsigned char* licensor){
 	unsigned char sign[64];
 	unsigned long hash_length = 20;
 	unsigned long sign_length = 64;
+	
 	dsa_key key;
 	prng_state rng_state;
-	if(hash_memory(sha1_id, licensor, length, hash, &hash_length) > 0){
-		log_error("Licensor hash failed");
-		return empty;
+	if(hash_memory(sha1_id, (const unsigned char*) licensor, length, hash, &hash_length) > 0){
+		return "[DSA] Failed to hash licensor";
 	}
 	if(register_prng(&sprng_desc) > 0){
-		log_error("Registering PRNG failed");
-		return empty;
+		return "[DSA] Registering PRNG failed";
 	}
 	if(sprng_add_entropy(seed, 20, &rng_state) > 0){
-		log_error("Adding entropy to PRNG failed");
-		return empty;
+		return "[DSA] Adding entropy to PRNG failed";
 	}
 	if(sprng_ready(&rng_state) > 0){
-		log_error("Preparing PRNG failed");
-		return empty;
+		return "[DSA] Preparing PRNG failed";
 	}
 	if(dsa_set_pqg(P, 64, Q, 20, G, 64, &key) > 0){
-		log_error("Inputting DSA variables failed");
-		return empty;
+		return "[DSA] Inputting DSA variables failed";
 	}
 	if(dsa_set_key(Y, 64, PK_PUBLIC, &key) > 0){
-		log_error("Inputting DSA public key failed");
-		return empty;
+		return "[DSA] Inputting DSA public key failed";
 	}
 	if(dsa_set_key(X, 20, PK_PRIVATE, &key) > 0){
-		log_error("Inputting DSA private key failed");
-		return empty;
+		return "[DSA] Inputting DSA private key failed";
 	}
 	memset(sign, 0, sign_length);
 	memset(code, 255, 42);
 	if(dsa_sign_hash(hash, 20, sign, &sign_length, &rng_state, find_prng("sprng"), &key) > 0){
-		log_error("Signing hash failed");
-		return empty;
+		return "[DSA] Signing hash failed";
 	}
 	dsa_free(&key);
 	unsigned long index = 3;
 	memcpy(code, sign + sign[index] - 16, 20);
 	if(sign[index] == 21 && sign[4] > 0){
-		log_error("Malformed DSA sign result");
-		return empty;
+		return "[DSA] Malformed DSA sign result";
 	}
 	index += sign[index] + 2;
 	memcpy(code + 20, sign + index + sign[index] - 19, 20);
-	return b64_encode(code, 42);
+	std::string final_key = b64_encode(code, 42);
+	HKEY hkey;
+	LONG result = RegOpenKeyExA(HKEY_CURRENT_USER, (LPCSTR)"Software\\Jitbit\\Macro Recorder", 0, KEY_ALL_ACCESS, &hkey);
+	if(result != ERROR_SUCCESS){
+		return "Registry key missing. Open and close Macro Recorder";
+	}
+	result = RegSetKeyValueA(hkey, NULL, (LPCSTR) "Email", REG_SZ, (LPCSTR) licensor, (strlen(licensor) + 1) * sizeof(char));
+	if(result != ERROR_SUCCESS){
+		return "Failed to set the licensor in registry";
+	}
+	result = RegSetKeyValueA(hkey, NULL, (LPCSTR) "Code", REG_SZ, (LPCSTR) final_key.c_str(), (final_key.length() + 1) * sizeof(char));
+	if(result != ERROR_SUCCESS){
+		return "Failed to set the serial key in registry";
+	}
+	RegCloseKey(hkey);
+	return "";
 }

@@ -1,1 +1,0 @@
-unsigned char* jitbit_generate_code(unsigned char* licensor);
